@@ -1,99 +1,110 @@
-import React, { useState } from 'react';
+import { useState, useEffect } from 'react';
 import ReactFlow, {
   Background,
   Controls,
   MiniMap,
-  addEdge,
   applyNodeChanges,
   applyEdgeChanges,
 } from 'reactflow';
-import type { Edge, NodeChange, EdgeChange, Connection } from 'reactflow';
+import type {
+  Node,
+  Edge,
+  NodeChange,
+  EdgeChange,
+  Connection,
+} from 'reactflow';
 import 'reactflow/dist/style.css';
 import DBTableNodes from './DbTableNodes';
+import type { diagramcanvas } from '../interface/diagramcanvas';
+
+import { Parser } from '@dbml/core';
 
 const nodeTypes = {
   dbTable: DBTableNodes,
 };
 
-const initialNodes = [
-  {
-    id: 'follows',
-    type: 'dbTable',
-    position: { x: 0, y: 100 },
-    data: {
-      tableName: 'follows',
-      columns: [
-        { name: 'following_user_id', type: 'integer', key: 'FK' },
-        { name: 'followed_user_id', type: 'integer', key: 'FK' },
-        { name: 'created_at', type: 'timestamp' },
-      ],
-    },
-  },
-  {
-    id: 'users',
-    type: 'dbTable',
-    position: { x: 300, y: 100 },
-    data: {
-      tableName: 'users',
-      columns: [
-        { name: 'id', type: 'integer', key: 'PK' },
-        { name: 'username', type: 'varchar' },
-        { name: 'role', type: 'varchar' },
-        { name: 'created_at', type: 'timestamp' },
-      ],
-    },
-  },
-  {
-    id: 'posts',
-    type: 'dbTable',
-    position: { x: 600, y: 100 },
-    data: {
-      tableName: 'posts',
-      columns: [
-        { name: 'id', type: 'integer', key: 'PK' },
-        { name: 'title', type: 'varchar' },
-        { name: 'body', type: 'text' },
-        { name: 'user_id', type: 'integer', key: 'FK' },
-        { name: 'status', type: 'varchar' },
-        { name: 'created_at', type: 'timestamp' },
-      ],
-    },
-  },
-];
+const DiagramCanvas = ({ dbmltext }: diagramcanvas) => {
+  const [nodes, setNodes] = useState<Node[]>([]);
+  const [edges, setEdges] = useState<Edge[]>([]);
 
-const initialEdges: Edge[] = [
-  {
-    id: 'e-follows-following',
-    source: 'follows',
-    sourceHandle: 'source-following_user_id',
-    target: 'users',
-    targetHandle: 'target-id',
-    label: 'following_user_id → id',
-    animated: true,
-  },
-  {
-    id: 'e-follows-followed',
-    source: 'follows',
-    sourceHandle: 'source-followed_user_id',
-    target: 'users',
-    targetHandle: 'target-id',
-    label: 'followed_user_id → id',
-    animated: true,
-  },
-  {
-    id: 'e-posts-user',
-    source: 'posts',
-    sourceHandle: 'source-user_id',
-    target: 'users',
-    targetHandle: 'target-id',
-    label: 'user_id → id',
-    animated: true,
-  },
-];
+  useEffect(() => {
+    if (!dbmltext || dbmltext.trim() === '') {
+      console.warn('Empty DBML text provided');
+      setNodes([]);
+      setEdges([]);
+      return;
+    }
 
-const DiagramCanvas = () => {
-  const [nodes, setNodes] = useState(initialNodes);
-  const [edges, setEdges] = useState<Edge[]>(initialEdges);
+    try {
+      const dbmlAst = Parser.parse(dbmltext, 'dbml');
+
+      // Handle no schema found
+      const schemas = dbmlAst.schemas;
+      if (!schemas || schemas.length === 0) {
+        console.warn('No schema found in DBML');
+        setNodes([]);
+        setEdges([]);
+        return;
+      }
+
+      const schema = schemas[0];
+
+      const tables = schema.tables ?? [];
+      const refs = schema.refs ?? [];
+
+      const generatedNodes: Node[] = tables.map((table, index) => ({
+        id: table.name ?? `table-${index}`,
+        type: 'dbTable',
+        position: { x: index * 300, y: 100 },
+        data: {
+          tableName: table.name ?? `Table${index}`,
+          columns: (table.fields ?? []).map((field: any) => ({
+            name: field.name ?? 'unknown',
+            type: field.type?.type_name ?? 'unknown',
+            key: field.pk
+              ? 'PK'
+              : field.unique
+              ? 'UNIQUE'
+              : field.ref
+              ? 'FK'
+              : undefined,
+          })),
+        },
+      }));
+
+      const generatedEdges: Edge[] = refs.map((ref: any, idx: number) => {
+        const sourceEndpoint = ref.endpoints?.[0];
+        const targetEndpoint = ref.endpoints?.[1];
+
+        if (!sourceEndpoint || !targetEndpoint) {
+          console.warn(`Skipping ref ${idx} due to missing endpoints`);
+          return null;
+        }
+
+        const sourceTable = sourceEndpoint.tableName ?? `unknown_source_${idx}`;
+        const sourceField = sourceEndpoint.fieldNames?.[0] ?? 'unknown_field';
+        const targetTable = targetEndpoint.tableName ?? `unknown_target_${idx}`;
+        const targetField = targetEndpoint.fieldNames?.[0] ?? 'unknown_field';
+
+        return {
+          id: `e-${sourceTable}-${targetTable}-${idx}`,
+          source: sourceTable,
+          sourceHandle: `source-${sourceField}`,
+          target: targetTable,
+          targetHandle: `target-${targetField}`,
+          label: `${sourceField} → ${targetField}`,
+          animated: true,
+        };
+      }).filter((edge) => edge !== null) as Edge[];
+
+      setNodes(generatedNodes);
+      setEdges(generatedEdges);
+    } catch (err) {
+      console.error('Failed to parse DBML:', err);
+      setNodes([]);
+      setEdges([]);
+    }
+  }, [dbmltext]);
 
   const onNodesChange = (changes: NodeChange[]) =>
     setNodes((nds) => applyNodeChanges(changes, nds));

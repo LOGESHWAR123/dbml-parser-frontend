@@ -73,9 +73,9 @@ const DBTableNodes = ({ data }: any) => {
                 }}
               />
               <span style={{ marginRight: 2 }}>
-              {col.key === 'PK' && '🔑'}
-              {col.key === 'FK' && '🔗'}
-            </span>
+                {col.key === 'PK' && '🔑'}
+                {col.key === 'FK' && '🔗'}
+              </span>
               <span style={{ flexGrow: 1 }}>
                 <strong>{col.name}</strong>: {col.type}
               </span>

@@ -1,13 +1,13 @@
-import React, { useState } from 'react';
+import { useEffect, useState } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { StreamLanguage } from '@codemirror/language';
 import { autocompletion, CompletionContext } from '@codemirror/autocomplete';
 import { lintGutter } from '@codemirror/lint';
 import { keymap } from '@codemirror/view';
 import { defaultKeymap } from '@codemirror/commands';
+import type { dbmlEditor } from '../interface/dbmlEditor';
 
 
-// DBML tokenizer
 const dbmlLanguage = StreamLanguage.define({
   token(stream) {
     if (stream.match(/Table|Ref|Project|Enum/i)) return "keyword";
@@ -19,7 +19,7 @@ const dbmlLanguage = StreamLanguage.define({
   }
 });
 
-// Extract tables and columns from current DBML text
+
 function extractSchema(docText: string) {
   const tables: Record<string, string[]> = {};
   let currentTable = '';
@@ -49,7 +49,6 @@ function extractSchema(docText: string) {
   return tables;
 }
 
-// Autocomplete logic
 function dbmlCompletion(getDoc: () => string) {
   return (context: CompletionContext) => {
     const word = context.matchBefore(/\w*/);
@@ -83,13 +82,18 @@ function dbmlCompletion(getDoc: () => string) {
 
 
 
-const DbmlEditor = () => {
+const DbmlEditor = ({setDbmlText , setIsDbmlEditorOpened} : dbmlEditor ) => {
   const [isOpen, setIsOpen] = useState(true);
   const [doc, setDoc] = useState('');
 
+  useEffect(() =>{
+    setDbmlText(doc);
+    setIsDbmlEditorOpened(isOpen);
+  },[doc , isOpen])
+
+
   return (
     <div style={{ display: 'flex', alignItems: 'stretch', height: '100vh', width: '100%' }}>
-      {/* Sliding editor container */}
       <div
         style={{
           width: isOpen ? '400px' : '0px',
@@ -113,7 +117,6 @@ const DbmlEditor = () => {
       />
       </div>
 
-      {/* Toggle button */}
       <div style={{ display: 'flex', alignItems: 'center', background: '#333', padding: '4px' }}>
         <button
           onClick={() => setIsOpen(prev => !prev)}
